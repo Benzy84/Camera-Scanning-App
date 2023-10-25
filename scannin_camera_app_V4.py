@@ -923,9 +923,9 @@ class galvo_scanning_thread(QThread):
 
         # Coefficients to convert from pixel shift to voltage
         a = 1050
-        b = 3816.2346252097523
-        p = -4149.638962731514
-        q = 973.4974079819152
+        b = 3816
+        p = -4149
+        q = 973
         self.a, self.b, self.p, self.q = a, b, p, q
 
     def set_coefficients(self, a, b, p, q):
