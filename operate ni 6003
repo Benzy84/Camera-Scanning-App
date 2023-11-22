@@ -1,0 +1,267 @@
+import numpy as np
+from tqdm import tqdm
+from PyDAQmx import Task, int32
+import PyDAQmx.DAQmxConstants as DAQmxConstants
+import time
+import matplotlib.pyplot as plt
+
+
+# Create new Tasks for AO and AI
+ao_task = Task()
+ai_task = Task()
+
+# Define the USB-6003 device and analog channels
+device = "Dev1"  # Replace this with your device name if different
+ao_channels = ["ao0", "ao1"]
+# ai0 - ao0
+# ai1 - ao1
+# ai2 - X driver scanner position
+# ai3 - X driver Internal Command Signal
+# ai4 - X driver Positioning Error
+# ai5 - Y driver scanner position
+# ai6 - Y driver Internal Command Signal
+# ai7 - Y driver Positioning Error
+ai_channels = ["ai0", "ai1", "ai2", "ai3", "ai4", "ai5", "ai6", "ai7"]  # Replace with your actual AI channels
+
+# Define the voltage range for the analog outputs and inputs
+voltage_min = -10.0
+voltage_max = 10.0
+
+v_x_min = -9
+v_x_max = -7
+v_y_min = 1
+v_y_max = 5
+step_size = 1
+
+# Create the voltage ranges
+voltage_range_x = np.arange(v_x_min, v_x_max + step_size, step_size)
+voltage_range_y = np.arange(v_y_min, v_y_max + step_size, step_size)
+
+indices = []
+sent_ao0_v_x = []
+sent_ao1_v_y = []
+read_ao0_v_x = []
+read_ao1_v_y = []
+X_driver_scanner_position = []
+X_driver_Internal_Command_Signal = []
+X_driver_Positioning_Error = []
+Y_driver_scanner_position = []
+Y_driver_Internal_Command_Signal = []
+Y_driver_Positioning_Error = []
+
+
+# Configure the analog output channels
+for ao_channel in ao_channels:
+    ao_task.CreateAOVoltageChan(f"{device}/{ao_channel}", "", voltage_min, voltage_max, DAQmxConstants.DAQmx_Val_Volts, None)
+
+# Configure the analog input channels
+for ai_channel in ai_channels:
+    ai_task.CreateAIVoltageChan(f"{device}/{ai_channel}", "", DAQmxConstants.DAQmx_Val_RSE, voltage_min, voltage_max, DAQmxConstants.DAQmx_Val_Volts, None)
+
+
+# Start the AO and AI tasks
+ao_task.StartTask()
+ai_task.StartTask()
+
+
+# Nested loops to iterate over voltage ranges
+for j, vx in enumerate(tqdm(voltage_range_x, desc='Progress X')):
+    for i, vy in enumerate(voltage_range_y):
+        # Store the index
+        indices.append((i, j))
+        
+        # Write voltages to AO channels
+        sent_voltage = np.array([vx, vy], dtype=np.float64)
+        sent_ao0_v_x.append(vx)
+        sent_ao1_v_y.append(vy)
+
+        ao_task.WriteAnalogF64(1, True, 10.0, DAQmxConstants.DAQmx_Val_GroupByChannel, sent_voltage, None, None)
+        
+        # Small delay to allow the voltage to settle
+        t1 = time.time()
+        t2 = t1
+        i=0
+        while t2-t1 < 0.01:
+            i+=1
+            t2 = time.time()
+    
+        
+        # Read voltages from AI channels
+        ai_data = np.zeros((8,), dtype=np.float64)  # Adjusted for 4 channels
+        read = int32()
+        ai_task.ReadAnalogF64(1, 10.0, DAQmxConstants.DAQmx_Val_GroupByChannel, ai_data, 8, read, None)
+        # ai0 - ao0
+        # ai1 - ao1
+        # ai2 - X driver scanner position
+        # ai3 - X driver internal Command Signal
+        # ai4 - X driver Positioning Error
+        # ai5 - Y driver scanner position
+        # ai6 - Y driver Internal Command Signal
+        # ai7 - Y driver Positioning Error
+        read_ao0_v_x.append(ai_data[0])
+        read_ao1_v_y.append(ai_data[1])
+        X_driver_scanner_position.append(ai_data[2])
+        X_driver_Internal_Command_Signal.append(ai_data[3])
+        X_driver_Positioning_Error.append(ai_data[4])
+        Y_driver_scanner_position.append(ai_data[5])
+        Y_driver_Internal_Command_Signal.append(ai_data[6])
+        Y_driver_Positioning_Error.append(ai_data[7])
+
+        
+        # print(f"Index: {i},{j} Sent voltages: {sent_voltage} Read voltages: {ai_data}")
+
+
+# Stop and clear the tasks
+ao_task.StopTask()
+ao_task.ClearTask()
+ai_task.StopTask()
+ai_task.ClearTask()
+
+# Convert lists to numpy arrays for easier manipulation
+sent_ao0_v_x = np.array(sent_ao0_v_x)
+sent_ao1_v_y = np.array(sent_ao1_v_y)
+read_ao0_v_x = np.array(read_ao0_v_x)
+read_ao1_v_y = np.array(read_ao1_v_y)
+X_driver_scanner_position = np.array(X_driver_scanner_position)
+X_driver_Internal_Command_Signal = np.array(X_driver_Internal_Command_Signal)
+X_driver_Positioning_Error = np.array(X_driver_Positioning_Error)
+Y_driver_scanner_position = np.array(Y_driver_scanner_position)
+Y_driver_Internal_Command_Signal = np.array(Y_driver_Internal_Command_Signal)
+Y_driver_Positioning_Error = np.array(Y_driver_Positioning_Error)
+indices = np.array(indices)
+
+# Calculate the error between sent and read voltages
+errors_ao0 =  sent_ao0_v_x - read_ao0_v_x
+errors_ao1 =  sent_ao1_v_y - read_ao1_v_y
+
+# Initialize arrays to store the standard deviations
+std_read_ao0_v_x = np.zeros(len(voltage_range_x))
+mean_error_ao0_v_x = np.zeros(len(voltage_range_x))
+std_error_ao0_v_x = np.zeros(len(voltage_range_x))
+std_X_driver_scanner_position = np.zeros(len(voltage_range_x))
+std_X_driver_Internal_Command_Signal = np.zeros(len(voltage_range_x))
+std_X_driver_Positioning_Errorn = np.zeros(len(voltage_range_x))
+std_read_ao1_v_y = np.zeros(len(voltage_range_y))
+mean_error_ao1_v_y = np.zeros(len(voltage_range_y))
+std_error_ao1_v_y = np.zeros(len(voltage_range_y))
+std_Y_driver_scanner_position = np.zeros(len(voltage_range_y))
+std_Y_driver_Internal_Command_Signal = np.zeros(len(voltage_range_y))
+std_Y_driver_Positioning_Errorn = np.zeros(len(voltage_range_y))
+std_cols = np.zeros(len(voltage_range_x))
+
+# Calculate the mean error for each row
+for i in range(len(voltage_range_y)):
+    std_read_ao1_v_y[i] = np.std(read_ao1_v_y[indices[:, 0] == i])
+    mean_error_ao1_v_y[i] = np.mean(errors_ao1[indices[:, 0] == i])
+    std_error_ao1_v_y[i] = np.std(errors_ao1[indices[:, 0] == i])
+
+    # Calculate the average and store them
+    std_Y_driver_scanner_position[i] = np.std(Y_driver_scanner_position[indices[:, 0] == i])
+    std_Y_driver_Internal_Command_Signal[i] = np.std(Y_driver_Internal_Command_Signal[indices[:, 0] == i])
+    std_Y_driver_Positioning_Errorn[i] = np.std(Y_driver_Positioning_Error[indices[:, 0] == i])
+
+for j in range(len(voltage_range_x)):
+    std_read_ao0_v_x[j] = np.std(errors_ao0[indices[:, 1] == j])
+    mean_error_ao0_v_x[j] = np.mean(errors_ao0[indices[:, 1] == j])
+    std_error_ao0_v_x[j] = np.std(errors_ao0[indices[:, 1] == j])
+
+    # Calculate the average and store them
+    std_X_driver_scanner_position[j] = np.std(X_driver_scanner_position[indices[:, 1] == j])
+    std_X_driver_Internal_Command_Signal[j] = np.std(X_driver_Internal_Command_Signal[indices[:, 1] == j])
+    std_X_driver_Positioning_Errorn[j] = np.std(X_driver_Positioning_Error[indices[:, 1] == j])
+
+
+
+
+# Plot sent voltages
+plt.figure()
+plt.title('Read Voltages vs. Sent Voltages V_x')
+plt.plot(sent_ao0_v_x, read_ao0_v_x, 'o-')
+plt.xlabel('Sent Voltage X (V)')
+plt.ylabel('Read Voltage X (V)')
+plt.grid(True)
+
+# Plot read voltages
+plt.figure()
+plt.title('Read Voltages vs. Sent Voltages V_y')
+plt.plot(sent_ao1_v_y, read_ao1_v_y, 'o-')
+plt.xlabel('Sent Voltage Y (V)')
+plt.ylabel('Read Voltage Y (V)')
+plt.grid(True)
+
+# Plotting errors for rows against X voltage
+plt.figure()
+plt.title('Mean Errors for Columns')
+plt.plot(voltage_range_x, mean_error_ao0_v_x, 'o-')
+plt.xlabel('Voltage X (V)')
+plt.ylabel('Mean Error (V)')
+plt.grid(True)
+
+# Plotting standard deviation of errors for rows against X voltage
+plt.figure()
+plt.title('Standard Deviation of Errors for Columns')
+plt.plot(voltage_range_x, std_read_ao0_v_x, 'o-')
+plt.xlabel('Voltage X (V)')
+plt.ylabel('Std Dev (V)')
+plt.grid(True)
+
+# Plotting errors for rows against Y voltage
+plt.figure()
+plt.title('Mean Errors for Rows')
+plt.plot(voltage_range_y, mean_error_ao1_v_y, 'o-')
+plt.xlabel('Voltage Y (V)')
+plt.ylabel('Mean Error (V)')
+plt.grid(True)
+
+# Plotting standard deviation of errors for rows against Y voltage
+plt.figure()
+plt.title('Standard Deviation of Errors for Rows')
+plt.plot(voltage_range_y, std_read_ao1_v_y, 'o-')
+plt.xlabel('Voltage Y (V)')
+plt.ylabel('Std Dev (V)')
+plt.grid(True)
+
+
+# ai0 - ao0
+# ai1 - ao1
+# ai2 - X driver scanner position
+# ai3 - X driver Internal Command Signal
+# ai4 - X driver Positioning Error
+# ai5 - Y driver scanner position
+# ai6 - Y driver Internal Command Signal
+# ai7 - Y driver Positioning Error
+
+plt.figure()
+plt.title('X_driver_Internal_Command_Signal vs. scanner_position')
+plt.plot(-X_driver_Internal_Command_Signal, X_driver_scanner_position, 'o-')
+plt.xlabel('Voltage X (V)')
+plt.ylabel('scanner_position (V)')
+plt.grid(True)
+
+plt.figure()
+plt.title('X_driver_Internal_Command_Signal vs. scanner_position')
+plt.plot(-Y_driver_Internal_Command_Signal, Y_driver_scanner_position, 'o-')
+plt.xlabel('Voltage Y (V)')
+plt.ylabel('scanner_position (V)')
+plt.grid(True)
+
+
+# Now plot the STD for X_driver_scanner_position vs. v_x
+plt.figure()
+plt.title('STD for X_driver_scanner_position vs. Voltage X')
+plt.plot(voltage_range_x, std_X_driver_scanner_position, 'o-')
+plt.xlabel('Voltage X (V)')
+plt.ylabel('STD ai2 (V)')
+plt.grid(True)
+
+plt.figure()
+plt.title('STD for Y_driver_scanner_position vs. Voltage Y')
+plt.plot(voltage_range_y, std_Y_driver_scanner_position, 'o-')
+plt.xlabel('Voltage Y (V)')
+plt.ylabel('STD ai3 (V)')
+plt.grid(True)
+
+
+plt.show()
+
+a=5

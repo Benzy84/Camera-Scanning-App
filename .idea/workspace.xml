@@ -6,9 +6,8 @@
   <component name="ChangeListManager">
     <list default="true" id="bbc4863a-7c76-4a5c-9694-b2fb3e75b8e6" name="Changes" comment="changing a,b,p,q coeff">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scannin_camera_app_V3.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scannin_camera_app_V4.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scannin_camera_app_pixel_scanning.py" beforeDir="false" afterPath="$PROJECT_DIR$/scannin_camera_app_pixel_scanning.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scannin_camera_app_voltage_scanning.py" beforeDir="false" afterPath="$PROJECT_DIR$/scannin_camera_app_voltage_scanning.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -113,23 +112,43 @@
       <breakpoints>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/scannin_camera_app_pixel_scanning.py</url>
-          <line>983</line>
-          <option name="timeStamp" value="9" />
+          <line>1053</line>
+          <option name="timeStamp" value="32" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/scannin_camera_app_voltage_scanning.py</url>
-          <line>963</line>
-          <option name="timeStamp" value="25" />
+          <line>1071</line>
+          <option name="timeStamp" value="38" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/scannin_camera_app_pixel_scanning.py</url>
-          <line>1090</line>
-          <option name="timeStamp" value="30" />
+          <line>1001</line>
+          <option name="timeStamp" value="41" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/scannin_camera_app_pixel_scanning.py</url>
-          <line>1052</line>
-          <option name="timeStamp" value="32" />
+          <line>1241</line>
+          <option name="timeStamp" value="42" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/scannin_camera_app_pixel_scanning.py</url>
+          <line>1288</line>
+          <option name="timeStamp" value="43" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/scannin_camera_app_pixel_scanning.py</url>
+          <line>1020</line>
+          <option name="timeStamp" value="45" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/scannin_camera_app_pixel_scanning.py</url>
+          <line>1089</line>
+          <option name="timeStamp" value="46" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/scannin_camera_app_pixel_scanning.py</url>
+          <line>1163</line>
+          <option name="timeStamp" value="47" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>

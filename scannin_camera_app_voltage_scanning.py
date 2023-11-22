@@ -15,7 +15,7 @@ import time
 from threading import Event
 from collections import deque
 from tl_dotnet_wrapper import TL_SDK
-from PyDAQmx import Task
+from PyDAQmx import Task, int32
 import PyDAQmx.DAQmxConstants as DAQmxConstants
 from PyQt5.QtCore import pyqtSignal, QObject, Qt, pyqtSlot, QThread
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QSlider, QHBoxLayout, \
@@ -712,6 +712,7 @@ class camera_capturing_thread(QThread):
         self.frame_captured_event = events[0]
         self.galvo_ready_event = events[1]
         self.current_voltages = []
+        self.actual_voltages = []
         self.current_indexes = []
 
     def run(self):
@@ -740,6 +741,7 @@ class camera_capturing_thread(QThread):
             try:
                 if scanning:
                     self.current_voltages = self.galvo.current_voltages
+                    self.actual_voltages = self.galvo.actual_voltages
                     self.current_indexes = self.galvo.current_indexes
                     self.frame_captured_event.set()
                     self.galvo_ready_event.clear()
@@ -751,7 +753,7 @@ class camera_capturing_thread(QThread):
                 self.captured_frames_to_save_queue.append(image_rgb)
                 if scanning:
                     self.scanned_frames_to_save_queue.put(image_rgb)
-                    self.scanned_voltages_queue.put(self.current_voltages)
+                    self.scanned_voltages_queue.put(self.actual_voltages)
                     self.scanned_indexes_queue.put(self.current_indexes)
                     if not self.image_saving_thread.active:
                         self.image_saving_thread.start()
@@ -925,6 +927,7 @@ class galvo_scanning_thread(QThread):
         self.total_points_to_scan = []
         self.image_saving_thread = image_saving_thread  # Create an instance
         self.galvo.current_voltages = []
+        self.galvo.actual_voltages = []
         self.galvo.current_indexes = []
         self.galvo.at_reference_point = False
 
@@ -964,9 +967,14 @@ class galvo_scanning_thread(QThread):
             self.galvo.at_reference_point = True
             self.galvo.current_indexes = [-1, -1]  # [row, column]
         data = np.array([x_voltage, y_voltage], dtype=np.float64)
-        self.galvo.task.WriteAnalogF64(1, True, 10.0, DAQmxConstants.DAQmx_Val_GroupByChannel, data, None, None)
+        self.galvo.ao_task.WriteAnalogF64(1, True, 10.0, DAQmxConstants.DAQmx_Val_GroupByChannel, data, None, None)
         time.sleep(0.01)
-        self.galvo.current_voltages = [x_voltage, y_voltage]
+        ai_data = np.zeros((2,), dtype=np.float64)  # Buffer for two channels
+        read = int32()
+        self.galvo.ai_task.ReadAnalogF64(1, 10.0, DAQmxConstants.DAQmx_Val_GroupByChannel, ai_data, 2, read, None)
+        print(f"Read voltages: X={ai_data[0]}, Y={ai_data[1]}")
+        self.galvo.actual_voltages = [ai_data[0], ai_data[1]]        
+        self.galvo.current_voltages = [x_voltage, y_voltage]        
         if self.camera.capturing:
             self.galvo_ready_event.set()
             print("Galvo ready")
@@ -1052,9 +1060,16 @@ class galvo_scanning_thread(QThread):
                         start_time_for_previous_point = start_time_for_this_point
                         start_time_for_this_point = time.time()
                         data = np.array([x_voltage, y_voltage], dtype=np.float64)
-                        self.galvo.task.WriteAnalogF64(1, True, 10.0, DAQmxConstants.DAQmx_Val_GroupByChannel, data,
+                        self.galvo.ao_task.WriteAnalogF64(1, True, 10.0, DAQmxConstants.DAQmx_Val_GroupByChannel, data,
                                                        None, None)
-                        time.sleep(0.01)
+                        time.sleep(0.1)
+                        ai_data = np.zeros((2,), dtype=np.float64)  # Buffer for two channels
+                        read = int32()
+                        self.galvo.ai_task.ReadAnalogF64(1, 10.0, DAQmxConstants.DAQmx_Val_GroupByChannel, ai_data, 2, read, None)
+
+
+                        print(f"Read voltages: X={ai_data[0]}, Y={ai_data[1]}")
+                        self.galvo.actual_voltages = [ai_data[0], ai_data[1]]
                         self.galvo.current_voltages = [x_voltage, y_voltage]
                         self.galvo.current_indexes = [row, col]
                         if self.camera.capturing:
@@ -1133,44 +1148,57 @@ class Galvo:
         self.scanning_height = []
         self.scanning_width = []
         self.step_size = []
-        self.task = None
+        self.ao_task = None
+        self.ai_task = None
         self.initialize()
-
+    
     def initialize(self):
-        # Create a new Task
-        self.task = Task()
+        # Set default scanning type and parameters
         self.set_scanning_type()
         self.set_scanning_parameters()
+        
+        # Initialize and configure the tasks
+        self.configure_ao_ai_channels()
+        
+        # Move to zero position as part of the initial setup
         self.go_to_zero_pos()
 
-    def go_to_zero_pos(self):
-        # Create a new Task
-        self.task = Task()
+
+    def configure_ao_ai_channels(self):
+        # Create and configure the analog output task
+        self.ao_task = Task()
+        self.ai_task = Task()
+
         device = "Dev1"
-        x_channel = "ao0"
-        y_channel = "ao1"
-        # Define the voltage range for the analog outputs
+        ao_channels = ["ao0", "ao1"]
+        ai_channels = ["ai0", "ai1"]
+
         voltage_min = -10.0
         voltage_max = 10.0
+        for ao_channel in ao_channels:
+            self.ao_task.CreateAOVoltageChan(f"{device}/{ao_channel}", "", voltage_min, voltage_max, DAQmxConstants.DAQmx_Val_Volts, None)
+        
+        for ai_channel in ai_channels:
+            self.ai_task.CreateAIVoltageChan(f"{device}/{ai_channel}", "", DAQmxConstants.DAQmx_Val_RSE, voltage_min, voltage_max, DAQmxConstants.DAQmx_Val_Volts, None)
 
-        # Configure the analog output channels
-        self.task.CreateAOVoltageChan(f"{device}/{x_channel}", "", voltage_min, voltage_max,
-                                      DAQmxConstants.DAQmx_Val_Volts, None)
-        self.task.CreateAOVoltageChan(f"{device}/{y_channel}", "", voltage_min, voltage_max,
-                                      DAQmxConstants.DAQmx_Val_Volts, None)
+        
+        # Start the AO and AI tasks
+        self.ao_task.StartTask()
+        self.ai_task.StartTask()
 
+
+    def go_to_zero_pos(self):
         # Write initial position to (0,0)
-        self.task.WriteAnalogF64(1, True, 10.0, DAQmxConstants.DAQmx_Val_GroupByChannel, np.array([0.0, 0.0]), None,
-                                 None)
+        self.ao_task.WriteAnalogF64(1, True, 10.0, DAQmxConstants.DAQmx_Val_GroupByChannel, np.array([0.0, 0.0]), None, None)
 
-    def set_scanning_type(self, scanning_type='Circular'):
+    def set_scanning_type(self, scanning_type='Rectangular'):
         self.scanning_type = scanning_type
 
     def get_scanning_type(self):
         return self.scanning_type
 
-    def set_scanning_parameters(self, scanning_radius=0.045, scanning_height=0.045, scanning_width=0.045,
-                                step_size=0.01):
+    def set_scanning_parameters(self, scanning_radius=0.05, scanning_height=0.05, scanning_width=0.05,
+                                step_size=0.005):
         self.scanning_radius = scanning_radius
         self.step_size = step_size
         self.scanning_height = scanning_height
@@ -1183,6 +1211,12 @@ class Galvo:
                       self.step_size
                       ]
         return parameters
+    
+    def stop_and_clear_tasks(self):
+        self.ao_task.StopTask()
+        self.ao_task.ClearTask()
+        self.ai_task.StopTask()
+        self.ai_task.ClearTask()
 
 
 class image_processing_thread(QThread):
